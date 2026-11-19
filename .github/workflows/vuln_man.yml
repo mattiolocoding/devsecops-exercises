@@ -1,10 +1,10 @@
-name: SBOM generation
+name: SBOM generation final
 
 on:
   workflow_dispatch:
 
 jobs:
-# Exercise SBOM generation
+## Exercise SBOM generation
   sbom:
     name: Generate app SBOM
     runs-on: ubuntu-26.04
@@ -18,6 +18,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # WebGoat: SBOM from Maven dependencies (cyclonedx-maven-plugin)
       - name: Setup Java 25
         if: matrix.project == 'webgoat'
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -38,6 +39,7 @@ jobs:
           -DoutputName=${{ matrix.project }}_bom
           -DoutputDirectory=.
 
+      # Juice Shop: SBOM from npm dependencies (project "sbom" script, cyclonedx-npm)
       - name: Setup Node 24
         if: matrix.project == 'juice-shop'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -60,147 +62,144 @@ jobs:
           retention-days: 5
           if-no-files-found: error
 
-
 ## Exercise Docker SBOM generation
-  # sbom-docker:
-  #   name: Generate docker SBOM
-  #   runs-on: ubuntu-26.04
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       project: ["webgoat", "juice-shop"]
-  #       cdx_spec_version: ["1.6"]
+  sbom-docker:
+    name: Generate docker SBOM
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ["webgoat", "juice-shop"]
+        cdx_spec_version: ["1.6"]
 
-  #   container:
-  #     image: ghcr.io/cdxgen/cdxgen@sha256:e4b5773b4bdd25ecc0602ab1bdada1efea38ad9a2e354cf6fa6aa13b5671139b # 13.5.0
-  #     options: --user root
+    container:
+      image: ghcr.io/cdxgen/cdxgen@sha256:e4b5773b4bdd25ecc0602ab1bdada1efea38ad9a2e354cf6fa6aa13b5671139b # 13.5.0
+      options: --user root
 
-  #   steps:
-  #     - name: Checkout Repository
-  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  #       with:
-  #         submodules: recursive
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-  #     - name: Setup Java 25
-  #       if: matrix.project == 'webgoat'
-  #       uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-  #       with:
-  #         java-version: 25
-  #         distribution: temurin
+      - name: Setup Java 25
+        if: matrix.project == 'webgoat'
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: 25
+          distribution: temurin
 
-  #     - name: Compile java project
-  #       if: matrix.project == 'webgoat'
-  #       working-directory: vuln_apps/webgoat
-  #       run: mvn -B clean package -DskipTests
+      - name: Compile java project
+        if: matrix.project == 'webgoat'
+        working-directory: vuln_apps/webgoat
+        run: mvn -B clean package -DskipTests
 
-  #     - name: Build Docker image
-  #       id: build-image
-  #       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-  #       with:
-  #         context: "${{ github.workspace }}/vuln_apps/${{ matrix.project }}"
-  #         push: false
-  #         load: true
-  #         tags: ${{ matrix.project }}:latest
+      - name: Build Docker image
+        id: build-image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: "${{ github.workspace }}/vuln_apps/${{ matrix.project }}"
+          push: false
+          load: true
+          tags: ${{ matrix.project }}:latest
 
-  #     - name: Generate docker SBOMs
-  #       run: >
-  #         cdxgen
-  #         --type docker
-  #         --format cyclonedx
-  #         --spec-version="1.6"
-  #         --project-name="${{ project }}"
-  #         --project-version="build-${{ github.run_number }}"
-  #         -o "${{ project }}-docker_bom.json"
-  #         image:tag
+      - name: Generate docker SBOMs
+        run: >
+          cdxgen
+          --type docker
+          --format cyclonedx
+          --spec-version="${{matrix.cdx_spec_version}}"
+          --project-name="${{ matrix.project }}"
+          --project-version="build-${{ github.run_number }}"
+          -o "${{ matrix.project }}-docker_bom.json"
+          ${{ matrix.project }}:latest
 
-  #     - name: upload Artifacts
-  #       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-  #       with:
-  #         name: sbom-${{matrix.project}}-docker
-  #         path: ${{ matrix.project }}-docker_bom.json
-  #         retention-days: 5
-  #         if-no-files-found: error
+      - name: upload Artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{matrix.project}}-docker
+          path: ${{ matrix.project }}-docker_bom.json
+          retention-days: 5
+          if-no-files-found: error
 
 ## Exercise Merge multiple SBOMs
-  # merge-sbom:
-  #   name: Merge previously generated SBOM
-  #   runs-on: ubuntu-26.04
-  #   needs: ["sbom", "sbom-docker"]
-  #   container: cyclonedx/cyclonedx-cli@sha256:252c2e26f468c25fea1e63ecde1bc3198ad6e9dbb57f5ed3236bddcb2281b3a7 # 0.33.1
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       project: ["webgoat", "juice-shop"]
+  merge-sbom:
+    name: Merge previously generated SBOM
+    runs-on: ubuntu-26.04
+    needs: ["sbom", "sbom-docker"]
+    container: cyclonedx/cyclonedx-cli@sha256:252c2e26f468c25fea1e63ecde1bc3198ad6e9dbb57f5ed3236bddcb2281b3a7 # 0.33.1
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ["webgoat", "juice-shop"]
 
-  #   steps:
-  #     - name: Download artifact sbom
-  #       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-  #       with:
-  #         name: sbom-${{matrix.project}}
-  #         path: ./sboms-${{matrix.project}}
+    steps:
+      - name: Download artifact sbom
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-${{matrix.project}}
+          path: ./sboms-${{matrix.project}}
 
-  #     - name: Download artifact sbom-docker
-  #       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-  #       with:
-  #         name: sbom-${{matrix.project}}-docker
-  #         path: ./sboms-${{matrix.project}}
+      - name: Download artifact sbom-docker
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-${{matrix.project}}-docker
+          path: ./sboms-${{matrix.project}}
 
-  #     - name: Merge previously generated sboms
-  #       run: >
-  #         cyclonedx merge
-  #         --input-files file1.json file2.json…
-  #         --output-file output.json
-  #         --name output-project-name
-  #         --version "build-${{ github.run_number }}"
-  #         --hierarchical
-  #         --group devsecops-exercises
+      - name: Merge previously generated sboms
+        run: >
+          cyclonedx merge
+          --input-files sboms-${{matrix.project}}/${{ matrix.project }}_bom.json sboms-${{matrix.project}}/${{ matrix.project }}-docker_bom.json
+          --output-file ${{ matrix.project }}_merged_sbom.json
+          --hierarchical
+          --name ${{ matrix.project }}
+          --version "build-${{ github.run_number }}"
+          --group devsecops-exercises
 
-  #     - name: upload Artifacts
-  #       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-  #       with:
-  #         name: sbom-${{matrix.project}}-merged
-  #         path: ${{ matrix.project }}_merged_sbom.json
-  #         retention-days: 5
-  #         if-no-files-found: error
+      - name: upload Artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{matrix.project}}-merged
+          path: ${{ matrix.project }}_merged_sbom.json
+          retention-days: 5
+          if-no-files-found: error
 
 ## Exercise SCVS assessment
-  # scvs:
-  #   name: SCVS assessment
-  #   runs-on: ubuntu-26.04
-  #   needs: ["merge-sbom"]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       project: ["webgoat", "juice-shop"]
+  scvs:
+    name: SCVS assessment
+    runs-on: ubuntu-26.04
+    needs: ["merge-sbom"]
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ["webgoat", "juice-shop"]
 
-  #   container:
-  #     image: ghcr.io/cdxgen/cdxgen@sha256:e4b5773b4bdd25ecc0602ab1bdada1efea38ad9a2e354cf6fa6aa13b5671139b # 13.5.0
-  #     options: --user root
+    container:
+      image: ghcr.io/cdxgen/cdxgen@sha256:e4b5773b4bdd25ecc0602ab1bdada1efea38ad9a2e354cf6fa6aa13b5671139b # 13.5.0
+      options: --user root
 
-  #   steps:
-  #     - name: Download artifact sbom-merged
-  #       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-  #       with:
-  #         name: sbom-${{matrix.project}}-merged
-  #         path: ./sboms-${{matrix.project}}
+    steps:
+      - name: Download artifact sbom-merged
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-${{matrix.project}}-merged
+          path: ./sboms-${{matrix.project}}
 
-  #     - name: SCVS report (JSON)
-  #       run: >
-  #         cdx-validate
-  #         -i sboms-${{matrix.project}}/${{ matrix.project }}_merged_sbom.json
-  #         --benchmark scvs-l1,scvs-l2,scvs-l3
-  #         --include-pass
-  #         --no-include-manual
-  #         --fail-severity critical
-  #         -r json
-  #         -o scvs-${{ matrix.project }}.json
+      - name: SCVS report (JSON)
+        run: >
+          cdx-validate
+          -i sboms-${{matrix.project}}/${{ matrix.project }}_merged_sbom.json
+          --benchmark scvs-l1,scvs-l2,scvs-l3
+          --include-pass
+          --no-include-manual
+          --fail-severity critical
+          -r json
+          -o scvs-${{ matrix.project }}.json
 
-  #     - name: Upload SCVS report
-  #       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-  #       with:
-  #         name: scvs-${{ matrix.project }}
-  #         path: scvs-${{ matrix.project }}.json
-  #         retention-days: 5
+      - name: Upload SCVS report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scvs-${{ matrix.project }}
+          path: scvs-${{ matrix.project }}.json
+          retention-days: 5
