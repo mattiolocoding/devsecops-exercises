@@ -15,6 +15,7 @@ import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -46,15 +47,6 @@ public class JWTRefreshEndpoint implements AssignmentEndpoint {
   private static final String JWT_PASSWORD = "bm5n3SkxCX4kKRy4";
   private static final List<String> validRefreshTokens = new ArrayList<>();
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-  private static final String ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-  private static String generateSecureRefreshToken(int length) {
-    StringBuilder sb = new StringBuilder(length);
-    for (int i = 0; i < length; i++) {
-      sb.append(ALPHABET.charAt(SECURE_RANDOM.nextInt(ALPHABET.length())));
-    }
-    return sb.toString();
-  }
 
   @PostMapping(
       value = "/JWT/refresh/login",
@@ -83,7 +75,9 @@ public class JWTRefreshEndpoint implements AssignmentEndpoint {
             .signWith(io.jsonwebtoken.SignatureAlgorithm.HS512, JWT_PASSWORD)
             .compact();
     Map<String, Object> tokenJson = new HashMap<>();
-    String refreshToken = generateSecureRefreshToken(20);
+    byte[] randomBytes = new byte[32];
+    SECURE_RANDOM.nextBytes(randomBytes);
+    String refreshToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     validRefreshTokens.add(refreshToken);
     tokenJson.put("access_token", token);
     tokenJson.put("refresh_token", refreshToken);
